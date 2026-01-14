@@ -1,100 +1,102 @@
-# System Workflow Diagrams
+# System Architecture & Workflows
 
-## Doctor Mode Workflow
+## 🏥 Doctor Mode Architecture
+
+A high-precision clinical research workflow dealing with complex medical queries.
 
 ```mermaid
-graph TD
-    UserQuery[User Query] --> ChatSpan
-    
-    subgraph Phoenix_Tracing [Phoenix Tracing Wrapper]
-        direction TB
-        ChatSpan(Chat Span: /doctor)
-        
-        ChatSpan --> EvidenceStep
-        ChatSpan --> LLMStep
-        
-        subgraph EvidenceStep [Evidence Gathering]
-            EvidenceSpan(Tool Span: evidence-engine)
-            
-            EvidenceSpan --> ParallelSearch{Parallel Search}
-            ParallelSearch --> PubMed[PubMed]
-            ParallelSearch --> Cochrane[Cochrane Library]
-            ParallelSearch --> Guidelines[WHO/CDC Guidelines]
-            ParallelSearch --> ClinicalTrials[ClinicalTrials.gov]
-            ParallelSearch --> DailyMed[DailyMed/FDA]
-            
-            PubMed & Cochrane & Guidelines & ClinicalTrials & DailyMed --> Reranking
-            
-            Reranking[BGE Cross-Encoder Reranking]
-            Reranking -- "Top 8-10 Sources" --> Context[Context Window]
-        end
-        
-        subgraph LLMStep [LLM Synthesis]
-            LLMSpan(LLM Span: openai)
-            
-            Context --> GPT4o[OpenAI GPT-4o]
-            GPT4o --> ResponseGen[Stream Response]
-        end
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#E3F2FD', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#F3E5F5'}}}%%
+graph LR
+    subgraph Frontend [User Interface]
+        User([👤 Clinician]) -->|Query| UI[Doctor Mode UI]
+        UI -->|POST /api/chat| API[Next.js API Route]
     end
-    
-    ResponseGen --> FinalResponse[Structured Clinical Response]
 
-    style ChatSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style EvidenceSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style LLMSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style Reranking fill:#4a90e2,stroke:#333,stroke-width:2px,color:white
-    style GPT4o fill:#10a37f,stroke:#333,stroke-width:2px,color:white
+    subgraph Orchestrator [Phoenix Tracing & Orchestration]
+        direction TB
+        API -->|Start Span| ChatSpan(Chat Span)
+        
+        subgraph EvidenceEngine [Evidence Engine]
+            ChatSpan -->|Call Tool| EvidenceSpan(Tool Span: Gather Evidence)
+            EvidenceSpan -->|PICO Extraction| PICO[Query Analysis]
+            PICO -->|Parallel| Sources{Source Selection}
+            
+            Sources -->|Search| PM[PubMed]
+            Sources -->|Search| CL[Cochrane]
+            Sources -->|Search| GL[Guidelines]
+            Sources -->|Search| CT[ClinicalTrials]
+            Sources -->|Search| DM[DailyMed]
+            
+            PM & CL & GL & CT & DM -->|Raw Results| Reranker[BGE Cross-Encoder]
+            Reranker -->|Top 8| Context[Context Window]
+        end
+        
+        subgraph ReasoningEngine [Reasoning & Synthesis]
+            ChatSpan -->|Call LLM| LLMSpan(LLM Span: GPT-4o)
+            Context -->|Injected| LLMSpan
+            LLMSpan -->|Stream| Output[Structured Response]
+        end
+        
+        Output -->|Data Stream| API
+    end
+
+    API -->|SSE Stream| UI
+    UI -->|Render| Tabs[Clinical Tabs]
+
+    classDef phoenix fill:#fff3e0,stroke:#f57c00,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef ai fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef tools fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
+    
+    class ChatSpan,EvidenceSpan,LLMSpan phoenix;
+    class Reranker,LLMSpan ai;
+    class PM,CL,GL,CT,DM tools;
 ```
 
-## General Mode Workflow
+## 🧠 General Mode Architecture
+
+A simplified, educational workflow optimized for speed and accessibility.
 
 ```mermaid
-graph TD
-    UserQuery[User Query] --> ChatSpan
-    
-    subgraph Phoenix_Tracing [Phoenix Tracing Wrapper]
-        direction TB
-        ChatSpan(Chat Span: /general)
-        
-        ChatSpan --> EvidenceStep
-        ChatSpan --> ImageStep
-        ChatSpan --> LLMStep
-        
-        subgraph EvidenceStep [Evidence Gathering]
-            EvidenceSpan(Tool Span: evidence-engine)
-            
-            EvidenceSpan --> ParallelSearch{Parallel Search}
-            ParallelSearch --> PubMed[PubMed]
-            ParallelSearch --> MedlinePlus[MedlinePlus]
-            ParallelSearch --> Guidelines[CDC/WHO Guidelines]
-            
-            PubMed & MedlinePlus & Guidelines --> Reranking
-            
-            Reranking[BGE Cross-Encoder Reranking]
-            Reranking -- "Top 5 Sources" --> Context[Context Window]
-        end
-        
-        subgraph ImageStep [Image Retrieval]
-            ImageSpan(Tool Span: image-retrieval)
-            
-            ImageSpan --> OpenI[Open-i (NLM)]
-            OpenI -- "Relevant Images" --> Context
-        end
-        
-        subgraph LLMStep [LLM Synthesis]
-            LLMSpan(LLM Span: openai)
-            
-            Context --> GPT4oMini[OpenAI GPT-4o-mini]
-            GPT4oMini --> ResponseGen[Stream Response]
-        end
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#F3E5F5', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#E3F2FD'}}}%%
+graph LR
+    subgraph Frontend [User Interface]
+        User([👤 General User]) -->|Query| UI[General Mode UI]
+        UI -->|POST /api/chat| API[Next.js API Route]
     end
+
+    subgraph Orchestrator [Phoenix Tracing & Orchestration]
+        direction TB
+        API -->|Start Span| ChatSpan(Chat Span)
+        
+        subgraph DataGathering [Data Gathering]
+            ChatSpan -->|Parallel Call| EvSpan(Tool: Evidence)
+            ChatSpan -->|Parallel Call| ImgSpan(Tool: Images)
+            
+            EvSpan -->|Search| KB[MedlinePlus & CDC]
+            EvSpan -->|Search and Ranking| BGE[BGE Reranker]
+            
+            ImgSpan -->|Fetch| OpenI[Open-i Images]
+        end
+        
+        subgraph Synthesis [Response Generation]
+            ChatSpan -->|Call LLM| LLMSpan(LLM Span: GPT-4o-mini)
+            KB -->|Context| LLMSpan
+            OpenI -->|Visuals| LLMSpan
+            
+            LLMSpan -->|Stream| Output[Simple Response]
+        end
+        
+        Output -->|Data Stream| API
+    end
+
+    API -->|SSE Stream| UI
+    UI -->|Render| View[Consumer View]
+
+    classDef phoenix fill:#fff3e0,stroke:#f57c00,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef ai fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef tools fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
     
-    ResponseGen --> FinalResponse[Consumer-Friendly Response]
-    
-    style ChatSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style EvidenceSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style ImageSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style LLMSpan fill:#ff9900,stroke:#333,stroke-width:2px
-    style Reranking fill:#4a90e2,stroke:#333,stroke-width:2px,color:white
-    style GPT4oMini fill:#10a37f,stroke:#333,stroke-width:2px,color:white
+    class ChatSpan,EvSpan,ImgSpan,LLMSpan phoenix;
+    class BGE,LLMSpan ai;
+    class KB,OpenI tools;
 ```
